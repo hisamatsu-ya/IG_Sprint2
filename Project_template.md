@@ -7,6 +7,17 @@
 Добавьте ссылку на файл в этот шаблон
 [ссылка на файл](ссылка)
 
+**Решение**
+[контейнерной диаграмма]([ссылка](https://viewer.diagrams.net/index.html?url=https://raw.githubusercontent.com/hisamatsu-ya/IG_Sprint2/cinema/kinobezdna_to_be_architecture.drawio#Uhttps://raw.githubusercontent.com/hisamatsu-ya/IG_Sprint2/cinema/kinobezdna_to_be_architecture.drawio#%7B%22pageId%22%3A%22LQrka3RXtTwaJQfLbMm_%22%7D))
+
+Комментарии:
+1. Все внешние сервисы(кроме платежных систем в силу простоты сценария) будут рабоботать только через единый API Gateway  в котором будет реализованы правила по Security, аутентификация и раутинг запросовов
+2. Kafka будет отвечать за продуктовую телеметрию, очереди по всем сервисам
+
+
+
+
+
 # Задание 2
 
 ### 1. Proxy
