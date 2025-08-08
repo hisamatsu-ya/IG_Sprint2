@@ -10,7 +10,7 @@
         <mxCell id="UJHYyGYnTlQYwypEruZN-4" value="Frontend (React Native / Web / TV)" style="shape=rectangle;whiteSpace=wrap;html=1;fillColor=#FCF8E3;" parent="1" vertex="1">
           <mxGeometry x="363" y="163" width="160" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="UJHYyGYnTlQYwypEruZN-5" value="API Gateway (REST, Helm)" style="shape=rectangle;whiteSpace=wrap;html=1;fillColor=#D9EDF7;" parent="1" vertex="1">
+        <mxCell id="UJHYyGYnTlQYwypEruZN-5" value="API Gateway&amp;nbsp;" style="shape=rectangle;whiteSpace=wrap;html=1;fillColor=#D9EDF7;" parent="1" vertex="1">
           <mxGeometry x="363" y="263" width="679" height="60" as="geometry" />
         </mxCell>
         <mxCell id="UJHYyGYnTlQYwypEruZN-6" value="Users Service (Go + PostgreSQL)" style="shape=rectangle;whiteSpace=wrap;html=1;" parent="1" vertex="1">
