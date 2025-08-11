@@ -1,12 +1,18 @@
-FROM golang:1.21 as builder
+# --- build ---
+FROM golang:1.21-alpine AS builder
 WORKDIR /app
+# если у тебя есть go.sum — скопируй и его, это ускорит кэш
+COPY go.mod ./
+# COPY go.sum ./
+RUN go mod download
 COPY . .
-RUN go mod tidy && go build -o proxy
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o /out/proxy ./main.go
 
-FROM gcr.io/distroless/base-debian12
-WORKDIR /
-COPY --from=builder /app/proxy /proxy
+# --- runtime ---
+FROM gcr.io/distroless/static-debian12
+COPY --from=builder /out/proxy /proxy
 EXPOSE 8000
 USER nonroot:nonroot
 ENTRYPOINT ["/proxy"]
+
 
