@@ -1,5 +1,15 @@
 name: Build, Test (API), and Push images
 
+on:
+  push:
+    branches: [ "main", "cinema" ]   # по заданию можно оставить только "main"; для удобства добавил "cinema"
+    paths:
+      - "src/**"
+      - ".github/workflows/docker-build-push.yml"
+  release:
+    types: [ "published" ]
+  workflow_dispatch: {}               # ручной запуск из вкладки Actions
+
 env:
   REGISTRY: ghcr.io
   DOCKER_BUILDKIT: 1
@@ -74,7 +84,6 @@ jobs:
       - name: Wait for readiness
         run: |
           set -e
-          # ждём по очереди основные health endpoints
           for i in {1..90}; do
             ok=1
             curl -fsS http://localhost:8080/health    || ok=0
@@ -125,15 +134,3 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Push proxy-service
-        if: success()
-        uses: docker/build-push-action@v6
-        with:
-          context: ./src/microservices/proxy
-          file: ./src/microservices/proxy/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ env.IMAGE_NS }}/proxy-service:sha-${{ github.sha }}
-            ${{ env.IMAGE_NS }}/proxy-service:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
