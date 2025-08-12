@@ -13,3 +13,4 @@ COPY --from=builder /app/events /usr/local/bin/events
 ENV PORT=8082
 EXPOSE 8082
 ENTRYPOINT ["/usr/local/bin/events"]
+
