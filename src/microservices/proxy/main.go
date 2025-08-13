@@ -24,7 +24,6 @@ func chooseTarget(monolith, movies string, migrationPercent int, gradual bool, r
 	if !gradual {
 		return monolith
 	}
-	// простая "липкость" по клиентскому признаку
 	clientID := r.Header.Get("X-Forwarded-For")
 	if clientID == "" {
 		clientID = r.RemoteAddr
@@ -73,13 +72,13 @@ func main() {
 	moviesProxy := newProxyTarget(moviesURL)
 	eventsProxy := newProxyTarget(eventsURL)
 
-	// --- EVENTS: всегда идёт в events-service (без миграции)
+	// EVENTS: всегда в events-service
 	http.HandleFunc("/api/events/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Proxy-Target", "events")
 		eventsProxy.ServeHTTP(w, r)
 	})
 
-	// --- MOVIES: Strangler Fig через фиче-флаг и процент
+	// MOVIES: Strangler Fig
 	http.HandleFunc("/api/movies", func(w http.ResponseWriter, r *http.Request) {
 		target := chooseTarget(monolithURL, moviesURL, migrationPercent, gradual, r)
 		w.Header().Set("X-Feature-Flag-Gradual", strconv.FormatBool(gradual))
@@ -93,13 +92,13 @@ func main() {
 		monolithProxy.ServeHTTP(w, r)
 	})
 
-	// --- все прочие /api/* идут в монолит
+	// Остальной API — в монолит
 	http.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Proxy-Target", "monolith")
 		monolithProxy.ServeHTTP(w, r)
 	})
 
-	// --- health и корневой ping
+	// health и ping
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
