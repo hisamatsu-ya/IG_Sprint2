@@ -2,14 +2,12 @@
 FROM golang:1.21-alpine AS build
 WORKDIR /src
 
-# сначала только go.mod (можно без go.sum)
+# подтягиваем базовые зависимости
 COPY go.mod ./
 RUN go mod download
 
-# теперь копируем код — чтобы tidy увидел импорты
+# копируем исходники и актуализируем зависимости (сгенерит go.sum)
 COPY . .
-
-# сгенерируем/обновим go.sum и подтянем всё нужное
 RUN go mod tidy
 
 # собираем бинарь
@@ -23,4 +21,3 @@ COPY --from=build /out/events /events
 ENV PORT=8082
 EXPOSE 8082
 ENTRYPOINT ["/events"]
-
