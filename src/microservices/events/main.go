@@ -39,10 +39,10 @@ func main() {
 	writers := make(map[string]*kafka.Writer, len(topics))
 	for _, topic := range topics {
 		writers[topic] = &kafka.Writer{
-			Addr:                   kafka.TCP(brokers...),
-			Topic:                  topic,
-			Balancer:               &kafka.Hash{},
-			AllowAutoTopicCreation: true,
+			Addr:     kafka.TCP(brokers...),
+			Topic:    topic,
+			Balancer: &kafka.Hash{},
+			// AllowAutoTopicCreation: true, // убрано — полагаемся на брокер
 		}
 	}
 
@@ -117,13 +117,13 @@ func (s *Server) acceptAny(_ context.Context, raw json.RawMessage) error {
 func (s *Server) startConsumers() {
 	for evType, topic := range s.topics {
 		r := kafka.NewReader(kafka.ReaderConfig{
-			Brokers:                s.brokers,
-			Topic:                  topic,
-			GroupID:                "events-service",
-			StartOffset:            kafka.LastOffset, // только новые
-			AllowAutoTopicCreation: true,
-			MinBytes:               1,
-			MaxBytes:               10e6,
+			Brokers:     s.brokers,
+			Topic:       topic,
+			GroupID:     "events-service",
+			StartOffset: kafka.LastOffset, // только новые
+			// AllowAutoTopicCreation: true, // убрано — полагаемся на брокер
+			MinBytes: 1,
+			MaxBytes: 10e6,
 		})
 		s.readers = append(s.readers, r)
 
