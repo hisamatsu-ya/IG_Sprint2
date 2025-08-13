@@ -24,6 +24,7 @@ func chooseTarget(monolith, movies string, migrationPercent int, gradual bool, r
 	if !gradual {
 		return monolith
 	}
+	// простая "липкость" по клиентскому признаку
 	clientID := r.Header.Get("X-Forwarded-For")
 	if clientID == "" {
 		clientID = r.RemoteAddr
@@ -43,6 +44,7 @@ func main() {
 	if port == "" {
 		port = "8000"
 	}
+
 	monolithURL := os.Getenv("MONOLITH_URL")
 	if monolithURL == "" {
 		monolithURL = "http://monolith:8080"
@@ -51,6 +53,11 @@ func main() {
 	if moviesURL == "" {
 		moviesURL = "http://movies-service:8081"
 	}
+	eventsURL := os.Getenv("EVENTS_SERVICE_URL")
+	if eventsURL == "" {
+		eventsURL = "http://events-service:8082"
+	}
+
 	gradual := false
 	if v := os.Getenv("GRADUAL_MIGRATION"); v == "true" || v == "1" {
 		gradual = true
@@ -64,7 +71,15 @@ func main() {
 
 	monolithProxy := newProxyTarget(monolithURL)
 	moviesProxy := newProxyTarget(moviesURL)
+	eventsProxy := newProxyTarget(eventsURL)
 
+	// --- EVENTS: всегда идёт в events-service (без миграции)
+	http.HandleFunc("/api/events/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Proxy-Target", "events")
+		eventsProxy.ServeHTTP(w, r)
+	})
+
+	// --- MOVIES: Strangler Fig через фиче-флаг и процент
 	http.HandleFunc("/api/movies", func(w http.ResponseWriter, r *http.Request) {
 		target := chooseTarget(monolithURL, moviesURL, migrationPercent, gradual, r)
 		w.Header().Set("X-Feature-Flag-Gradual", strconv.FormatBool(gradual))
@@ -78,19 +93,20 @@ func main() {
 		monolithProxy.ServeHTTP(w, r)
 	})
 
+	// --- все прочие /api/* идут в монолит
 	http.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Proxy-Target", "monolith")
 		monolithProxy.ServeHTTP(w, r)
 	})
 
+	// --- health и корневой ping
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("CinemaAbyss Proxy is up. Try /api/movies\n"))
+		_, _ = w.Write([]byte("CinemaAbyss Proxy is up. Try /api/movies or /api/events/health\n"))
 	})
 
 	srv := &http.Server{
@@ -99,8 +115,11 @@ func main() {
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
-	log.Printf("proxy listening on :%s (gradual=%v, percent=%d, monolith=%s, movies=%s)",
-		port, gradual, migrationPercent, monolithURL, moviesURL)
+
+	log.Printf(
+		"proxy listening on :%s (gradual=%v, percent=%d, monolith=%s, movies=%s, events=%s)",
+		port, gradual, migrationPercent, monolithURL, moviesURL, eventsURL,
+	)
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
