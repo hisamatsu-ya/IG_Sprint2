@@ -1,4 +1,4 @@
-package main
+AllowAutoTopicCreation:package main
 
 import (
 	"context"
@@ -42,7 +42,7 @@ func main() {
 			Addr:     kafka.TCP(brokers...),
 			Topic:    topic,
 			Balancer: &kafka.Hash{},
-			// AllowAutoTopicCreation: true, // убрано — полагаемся на брокер
+			// AllowAutoTopicCreation: true, // убрано — полагаемся на брокер v
 		}
 	}
 
