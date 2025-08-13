@@ -1,4 +1,4 @@
-AllowAutoTopicCreation:package main
+package main
 
 import (
 	"context"
