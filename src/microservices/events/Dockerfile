@@ -1,16 +1,16 @@
-# --- Build stage ---
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY go.mod ./
+# ---- build ----
+FROM golang:1.21-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o events main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/events ./main.go
 
-# --- Runtime stage ---
-FROM alpine:3.20
-WORKDIR /app
-COPY --from=builder /app/events /usr/local/bin/events
+# ---- runtime ----
+FROM gcr.io/distroless/base-debian12
+WORKDIR /
+USER nonroot:nonroot
+COPY --from=build /out/events /events
 ENV PORT=8082
 EXPOSE 8082
-ENTRYPOINT ["/usr/local/bin/events"]
 
