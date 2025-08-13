@@ -84,6 +84,8 @@ echo.
 echo === Quick health check ===
 curl -s "%HEALTH_URL%" || echo (health check skipped or failed)
 
+
 echo.
-echo Done.
+echo Done. Press any key to close this window.
+pause
 endlocal
