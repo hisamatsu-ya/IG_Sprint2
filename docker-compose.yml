@@ -73,9 +73,11 @@ services:
     container_name: cinemaabyss-monolith
     depends_on:
       - postgres
+    ports:
+      - "8080:8080"
     environment:
       PORT: 8080
-      DATABASE_URL: postgres://cinema:cinema@postgres:5432/cinema?sslmode=disable
+      DB_CONNECTION_STRING: postgres://cinema:cinema@postgres:5432/cinema?sslmode=disable
     networks:
       - cinemaabyss-network
 
@@ -86,9 +88,11 @@ services:
     container_name: cinemaabyss-movies-service
     depends_on:
       - postgres
+    ports:
+      - "8081:8081"
     environment:
       PORT: 8081
-      DATABASE_URL: postgres://cinema:cinema@postgres:5432/cinema?sslmode=disable
+      DB_CONNECTION_STRING: postgres://cinema:cinema@postgres:5432/cinema?sslmode=disable
     networks:
       - cinemaabyss-network
 
@@ -99,6 +103,8 @@ services:
     container_name: cinemaabyss-events-service
     depends_on:
       - kafka
+    ports:
+      - "8082:8082"
     environment:
       PORT: 8082
       KAFKA_BROKERS: kafka:9092
