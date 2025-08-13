@@ -1,10 +1,12 @@
-version: "3.9"
-
+# Compose V2: поле "version" не нужно — удалено
 networks:
   cinemaabyss-network:
 
+volumes:
+  pgdata:
+
 services:
-  # --- Data layer ---
+  # ---------- Data layer ----------
   postgres:
     image: postgres:15
     container_name: cinemaabyss-postgres
@@ -14,6 +16,7 @@ services:
       POSTGRES_DB: cinema
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # если у вас есть init-скрипты БД, оставьте этот маппинг; иначе закомментируйте
       - ./initdb:/docker-entrypoint-initdb.d
     networks:
       - cinemaabyss-network
@@ -23,29 +26,29 @@ services:
       timeout: 3s
       retries: 20
 
-  # --- Kafka stack ---
+  # ---------- Kafka stack (Bitnami) ----------
   zookeeper:
-    image: wurstmeister/zookeeper:3.4.6
+    image: bitnami/zookeeper:3.9
     container_name: cinemaabyss-zookeeper
-    ports:
-      - "2181:2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
     networks:
       - cinemaabyss-network
 
   kafka:
-    image: wurstmeister/kafka:2.13-2.8.1
+    image: bitnami/kafka:3.7
     container_name: cinemaabyss-kafka
     depends_on:
       - zookeeper
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      # автосоздание нужных топиков (1 партиция, 1 реплика)
-      KAFKA_CREATE_TOPICS: "movie-events:1:1,user-events:1:1,payment-events:1:1"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_BROKER_ID=1
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
     networks:
       - cinemaabyss-network
 
@@ -62,7 +65,7 @@ services:
     networks:
       - cinemaabyss-network
 
-  # --- Application layer ---
+  # ---------- Application layer ----------
   monolith:
     build:
       context: ./src/monolith
@@ -119,12 +122,9 @@ services:
       MONOLITH_URL: http://monolith:8080
       MOVIES_SERVICE_URL: http://movies-service:8081
       EVENTS_SERVICE_URL: http://events-service:8082
-      GRADUAL_MIGRATION: "true"       # вкл/выкл Strangler Fig
-      MOVIES_MIGRATION_PERCENT: "50"  # процент трафика на movies-service
+      GRADUAL_MIGRATION: "true"       # Strangler Fig on/off
+      MOVIES_MIGRATION_PERCENT: "50"  # % трафика на movies-service
     ports:
       - "8000:8000"
     networks:
       - cinemaabyss-network
-
-volumes:
-  pgdata:
