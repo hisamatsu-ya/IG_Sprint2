@@ -19,6 +19,12 @@ REM 1) Остановить и убрать проект
 REM =========================================
 echo [1/6] docker compose down -v --remove-orphans
 docker compose down -v --remove-orphans
+if errorlevel 1 (
+  echo.
+  echo [ERROR] docker compose down failed.
+  pause
+  exit /b 1
+)
 
 REM =========================================
 REM 2) Удалить контейнеры с явными именами (если остались)
@@ -63,7 +69,8 @@ echo [6/6] docker compose build --no-cache
 docker compose build --no-cache
 if errorlevel 1 (
   echo.
-  echo Build failed. Aborting.
+  echo [ERROR] Build failed. See output above.
+  pause
   exit /b 1
 )
 
@@ -72,7 +79,8 @@ echo === Starting stack (detached) ===
 docker compose up -d
 if errorlevel 1 (
   echo.
-  echo docker compose up failed. Aborting.
+  echo [ERROR] docker compose up failed.
+  pause
   exit /b 1
 )
 
@@ -83,7 +91,6 @@ docker compose ps
 echo.
 echo === Quick health check ===
 curl -s "%HEALTH_URL%" || echo (health check skipped or failed)
-
 
 echo.
 echo Done. Press any key to close this window.
