@@ -1,136 +1,144 @@
-# Compose V2: поле "version" не нужно — удалено
-networks:
-  cinemaabyss-network:
-
-volumes:
-  pgdata:
+version: "3.9"
 
 services:
-  # ---------- Data layer ----------
+  # --- Database ---
   postgres:
-    image: postgres:15
-    container_name: cinemaabyss-postgres
+    image: postgres:15-alpine
+    container_name: cinema_postgres
+    restart: unless-stopped
     environment:
+      POSTGRES_DB: cinema
       POSTGRES_USER: cinema
       POSTGRES_PASSWORD: cinema
-      POSTGRES_DB: cinema
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # если у вас есть init-скрипты БД, оставьте этот маппинг; иначе закомментируйте
-      - ./initdb:/docker-entrypoint-initdb.d
-    networks:
-      - cinemaabyss-network
+      - ./src/database:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cinema -d cinema"]
       interval: 5s
       timeout: 3s
       retries: 20
 
-  # ---------- Kafka stack (Bitnami) ----------
-  zookeeper:
-    image: bitnami/zookeeper:3.9
-    container_name: cinemaabyss-zookeeper
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-    networks:
-      - cinemaabyss-network
-
-  kafka:
-    image: bitnami/kafka:3.7
-    container_name: cinemaabyss-kafka
-    depends_on:
-      - zookeeper
-    environment:
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_BROKER_ID=1
-      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
-      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
-      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-    networks:
-      - cinemaabyss-network
-
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: cinemaabyss-kafka-ui
-    depends_on:
-      - kafka
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-    ports:
-      - "8090:8080"
-    networks:
-      - cinemaabyss-network
-
-  # ---------- Application layer ----------
+  # --- Monolith (API on 8080) ---
   monolith:
     build:
       context: ./src/monolith
-      dockerfile: Dockerfile
-    container_name: cinemaabyss-monolith
+    container_name: cinema_monolith
+    restart: unless-stopped
+    environment:
+      # DB (используем DNS-имя postgres внутри сети Compose)
+      DATABASE_URL: postgresql://cinema:cinema@postgres:5432/cinema
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: cinema
+      DB_USER: cinema
+      DB_PASSWORD: cinema
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
-    environment:
-      PORT: 8080
-      DB_CONNECTION_STRING: postgres://cinema:cinema@postgres:5432/cinema?sslmode=disable
-    networks:
-      - cinemaabyss-network
 
-  movies-service:
+  # --- Movies microservice (API on 8081) ---
+  movies:
     build:
       context: ./src/microservices/movies
-      dockerfile: Dockerfile
-    container_name: cinemaabyss-movies-service
+    container_name: cinema_movies
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://cinema:cinema@postgres:5432/cinema
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: cinema
+      DB_USER: cinema
+      DB_PASSWORD: cinema
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8081:8081"
-    environment:
-      PORT: 8081
-      DB_CONNECTION_STRING: postgres://cinema:cinema@postgres:5432/cinema?sslmode=disable
-    networks:
-      - cinemaabyss-network
 
-  events-service:
-    build:
-      context: ./src/microservices/events
-      dockerfile: Dockerfile
-    container_name: cinemaabyss-events-service
-    depends_on:
-      - kafka
-    ports:
-      - "8082:8082"
-    environment:
-      PORT: 8082
-      KAFKA_BROKERS: kafka:9092
-      MOVIE_TOPIC: movie-events
-      USER_TOPIC: user-events
-      PAYMENT_TOPIC: payment-events
-    networks:
-      - cinemaabyss-network
-
-  proxy-service:
+  # --- Proxy (API Gateway on 8000) ---
+  proxy:
     build:
       context: ./src/microservices/proxy
-      dockerfile: Dockerfile
-    container_name: cinemaabyss-proxy-service
+    container_name: cinema_proxy
+    restart: unless-stopped
+    environment:
+      # апстримы — по DNS-именам сервисов
+      MONOLITH_BASE_URL: http://monolith:8080
+      MOVIES_BASE_URL:   http://movies:8081
+      # Strangler Fig: 0 = весь трафик в монолит; увеличивайте до 100
+      MOVIES_MIGRATION_PERCENT: "0"
     depends_on:
       - monolith
-      - movies-service
-      - events-service
-    environment:
-      PORT: 8000
-      MONOLITH_URL: http://monolith:8080
-      MOVIES_SERVICE_URL: http://movies-service:8081
-      EVENTS_SERVICE_URL: http://events-service:8082
-      GRADUAL_MIGRATION: "true"       # Strangler Fig on/off
-      MOVIES_MIGRATION_PERCENT: "50"  # % трафика на movies-service
+      - movies
     ports:
       - "8000:8000"
-    networks:
-      - cinemaabyss-network
+
+  # --- Kafka (KRaft, без Zookeeper) ---
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: cinema_kafka
+    restart: unless-stopped
+    environment:
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
+      # (не обязательно, но можно явно указать каталог логов)
+      - KAFKA_CFG_LOG_DIRS=/bitnami/kafka/data
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # --- Events microservice (API on 8082) ---
+  events:
+    build:
+      context: ./src/microservices/events
+    container_name: cinema_events
+    restart: unless-stopped
+    environment:
+      # ВАЖНО: из контейнера обращаться к kafka по имени сервиса, а не localhost
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+
+  # --- Kafka UI (http://localhost:8090) ---
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: cinema_kafka_ui
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+
+volumes:
+  pgdata:
+  kafka_data:
