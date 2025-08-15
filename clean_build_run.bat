@@ -20,6 +20,12 @@ REM  Stop & remove compose stack
 REM ============================
 echo [1/6] docker compose down -v --remove-orphans
 docker compose down -v --remove-orphans
+if errorlevel 1 (
+  echo.
+  echo [ERROR] docker compose down failed.
+  pause
+  exit /b 1
+)
 
 REM ============================
 REM  Remove project-named containers (cinemaabyss-*)
@@ -45,8 +51,8 @@ if "%CLEAN_ALL%"=="1" (
   )
 
   echo [5/6] Pruning networks and volumes
-  docker network prune -f >nul 2>&1
-  docker volume prune -f >nul 2>&1
+  docker network prune -f
+  docker volume prune -f
 ) else (
   echo [3-5/6] Skipping global prune (CLEAN_ALL=0)
 )
@@ -58,7 +64,8 @@ echo [6/6] docker compose build --no-cache
 docker compose build --no-cache
 if errorlevel 1 (
   echo.
-  echo Build failed. Aborting.
+  echo [ERROR] Build failed. See output above.
+  pause
   exit /b 1
 )
 
@@ -67,7 +74,8 @@ echo === Starting stack (detached) ===
 docker compose up -d
 if errorlevel 1 (
   echo.
-  echo docker compose up failed. Aborting.
+  echo [ERROR] docker compose up failed.
+  pause
   exit /b 1
 )
 
@@ -83,4 +91,3 @@ echo.
 echo Done. Press any key to close this window.
 pause
 endlocal
-
